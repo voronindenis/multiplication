@@ -111,17 +111,34 @@ function curry(fn) {
   };
 }
 
+// either :: (a -> c) -> (b -> c) -> Either a b -> c
+const either = curry((f, g, e) => {
+  if (e.isLeft) {
+    return f(e.$value);
+  }
+
+  return g(e.$value);
+});
+
+// identity :: x -> x
+const identity = x => x;
+
+const trace = curry((tag, x) => {
+  console.log(tag, x);
+  return x;
+});
+
 // stringToArray :: String -> [String]
 const stringToArray = (str) => str.split('');
 
-// reverse :: [a] -> Either([a], _)
-const reverse = (a) => Array.isArray(a) ? Either.of(a.reverse()).join() : left(a).$value;
+// reverse :: [a] -> [b]
+const reverse = (a) => [...a].reverse();
 
-// join :: [a] -> Either(a, _)
-const join = (a) => Array.isArray(a) ? Either.of(a.join('')).join() : left(a).$value;
+// join :: [a] -> String
+const join = (a) => a.join('');
 
-// sliceByIndex :: [a] -> Number -> Either(a, _)
-const sliceByIndex = curry((a, i) => Array.isArray(a) ? Either.of(a.slice(i)).join() : left(a).$value);
+// sliceByIndex :: [a] -> [b]
+const sliceByIndex = curry((a, i) => a.slice(i));
 
 // findFirstNatureNumIndex :: [a] -> Number
 const findFirstNatureNumIndex = (a) => a.findIndex(el => el !== '0');
@@ -133,62 +150,66 @@ const sliceFromIndex = curry((f, fn, a) => compose(f(a), fn)(a));
 const compactNum = sliceFromIndex(sliceByIndex, findFirstNatureNumIndex);
 
 // getCompactNum :: [a] -> [a]
-const getCompactNum = compose(reverse, compactNum, stringToArray)
+const getCompactNum = compose(reverse, compactNum, stringToArray);
 
-// applyIfIsNotZero :: a -> fn -> b -> Either(fn(b), b)
-const applyIfIsNotZero = curry((val, fn, otherVal) => (
-	val !== otherVal ? Either.of(fn(otherVal)).join() : left(otherVal).$value
+// applyIfIsNotZero :: a -> Either(a, a)
+const applyIfIsNotZero = curry((val) => (
+ val !== '0' ? Either.of(val): left(val)
 ));
 
-// getArrNum :: String -> [String]
-const getArrNum = applyIfIsNotZero('0', getCompactNum);
+// getArrFromStrNum :: String -> [String]
+const getArrFromStrNum = compose(
+  either(identity, getCompactNum), applyIfIsNotZero
+);
 
-// applyIfIsArrays :: fn -> a -> b -> Either(fn(a, b), a)
-const applyIfIsArrays = curry((fn, arrA, arrB) => {
-	if (arrA === '0') {
-	    return left(arrA).$value
-	  }
-	  if (arrB === '0') {
-	    return left(arrB).$value
-	  }
-	return Either.of(fn(arrA, arrB)).join()
+// applyIfIsArrays :: a -> b -> Either({a, b}, a)
+const applyIfIsArrays = curry((arrA, arrB) => {
+ if (arrA === '0') {
+     return left(arrA)
+   }
+   if (arrB === '0') {
+     return left(arrB)
+   }
+ return Either.of({ arrA, arrB })
 })
 
-// multiplyArr :: [a] -> [b] -> [c]
-const multiplyArr = curry((arrA, arrB) => arrA.reduce((acc, elA, i) =>{
-	arrB.forEach((elB, j) => {
-  	const n = elA * elB;
-    acc[i + j] = (acc[i + j]) ? acc[i + j] + n : n;
-  })
-  return acc;
-}, []));
+// multiplyArrays :: {[a], [b]} -> [c]
+const multiplyArrays = curry((arrays) => {
+  const { arrA, arrB } = arrays;
+  return arrA.reduce(
+    (acc, elA, i) => {
+       arrB.forEach((elB, j) => {
+       const n = elA * elB;
+        acc[i + j] = (acc[i + j]) ? acc[i + j] + n : n;
+     })
+     return acc;
+  }, [])
+});
 
-// getMultipliedArr :: a -> b -> fn -> Either(fn(a, b), a)
-const getMultipliedArr = applyIfIsArrays(multiplyArr);
+// getMultipliedArray :: ([a], [b]) -> Either([c], _)
+const getMultipliedArray = compose(either(identity, multiplyArrays), applyIfIsArrays);
 
-// mapMultipliedArr :: [Number] -> [Number]
-const mapMultipliedArr = (arr) => {
-	const stack = [...arr];
+// mapMultipliedArray :: [Number] -> [Number]
+const mapMultipliedArray = (arr) => {
+  const stack = [...arr];
   for (var i = 0; i < stack.length; i++) {
     var num = stack[i] % 10;
     var move = Math.floor(stack[i] / 10);
     stack[i] = num;
-
     if (stack[i + 1])
       stack[i + 1] += move;
     else if (move != 0)
       stack[i + 1] = move;
   }
   return stack;
-}
+};
 
-// getMappedMultipliedArr :: a -> fn -> b -> Either(fn(b), b)
-const getMappedMultipliedArr = applyIfIsNotZero('0', mapMultipliedArr);
+// getMultipliedNumber :: [String] -> string
+const getMultipliedNumber = compose(join , reverse, either(identity, mapMultipliedArray), applyIfIsNotZero);
 
-// getMultipliedNum :: [String] -> string
-const getMultipliedNum = compose(join , reverse, getMappedMultipliedArr);
-
-const multiply = (a, b) => getMultipliedNum(getMultipliedArr(getArrNum(a), getArrNum(b)))
+const multiply = (a, b) => getMultipliedNumber(
+  getMultipliedArray(getArrFromStrNum(a), getArrFromStrNum(b))
+);
 
 console.log(multiply("30", "69")) // "2070"
 
